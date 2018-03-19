@@ -1,0 +1,26 @@
+# Compiled Object Files
+*.o
+
+# Compiled Dynamic Libraries
+*.so
+
+# Compiled Static Libraries
+*.lib
+
+# Fortran Module Files
+*.mod
+*.smod
+
+# Executables
+*.exe
+*.out
+
+# CMake Files
+*.cmake
+CMakeCache.txt
+CMakeFiles/
+Makefile
+
+# File Copies
+*~
+

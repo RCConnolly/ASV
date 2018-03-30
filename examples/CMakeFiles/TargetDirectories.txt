@@ -1,3 +1,0 @@
-/home/dct-dev/ASV/examples/CMakeFiles/rebuild_cache.dir
-/home/dct-dev/ASV/examples/CMakeFiles/edit_cache.dir
-/home/dct-dev/ASV/examples/CMakeFiles/myFM2.dir

@@ -23,16 +23,47 @@ constexpr unsigned int nDims = 2;
 typedef nDGridMap<FMCell, nDims> FMGrid2D;
 typedef typename std::vector< std::array<double, nDims> > Path2D;
 
-std::array<unsigned int, nDims> start_coord = {150, 330};
-std::array<unsigned int, nDims>  goal_coord = {720, 220};
+void computeDistGrid(FMGrid2D & g) {
+    // Create distance solver
+    Solver<FMGrid2D> * sd = new FMM<FMGrid2D>("FMM_Dist");
 
-void computePath(Solver<FMGrid2D> * s, Path2D * p, std::vector<double> * p_vel, double step = 1) {
-    Path2D * path = p;
-    GradientDescent<FMGrid2D> grad;
-    unsigned int idx;
-    s->getGrid()->coord2idx(goal_coord, idx);
-    grad.apply(*s->getGrid(),idx, *path, *p_vel, step);
+    // establishes grid type as dist_grid and "cleans" each cell in grid
+    // "cleaning" sets default value of -1 for each cell, does not change its occupancy
+    sd->setEnvironment(&g);
+
+    // sets starting and end points given their coords on grid
+    sd->setInitialAndGoalPoints({150, 330}, {720, 220}); // Init and goal points directly set.
+    
+    // computes the distances map
+    sd->compute();
+    
+    delete sd;
 }
+
+void computeSafeGrid(FMGrid2D & g) {
+    // Create safety solver
+    Solver<FMGrid2D> * sd = new FMM<FMGrid2D>("FMM_Safe");
+
+    // establishes grid type as dist_grid and "cleans" each cell in grid
+    // "cleaning" sets default value of -1 for each cell, does not change its occupancy
+    sd->setEnvironment(&g);
+
+    // sets starting points as each occupied cell in grid
+    std::vector<unsigned int> obs_indices;
+    g.getOccupiedCells(obs_indices);
+    sd->setInitialPoints(obs_indices);
+    
+    // computes the safety map
+    sd->compute();
+    
+    delete sd;
+}
+
+/*
+void computeWeightedGrid(FMGrid2D & g, double safe_w, double dist_w) {
+
+}
+*/
 
 int main(int argc, const char ** argv)
 {
@@ -45,28 +76,13 @@ int main(int argc, const char ** argv)
         exit(1);
     }
 
-  
     /////////////////////////
     /// Compute Safety Map //
     /////////////////////////
 
-    // Create safety solver
-    Solver<FMGrid2D> * ss = new FMM<FMGrid2D>("FMM_Safe");
     FMGrid2D safe_grid;
     MapLoader::loadMapFromImg(filename.c_str(), safe_grid); //sets occupancy
-
-    // establishes grid type as dist_grid and "cleans" each cell in grid
-    // "cleaning" sets default value of -1 for each cell, does not change its occupancy
-    ss->setEnvironment(&safe_grid);
-
-    // sets starting points as each occupied cell in grid
-    std::vector<unsigned int> obs_indices;
-    safe_grid.getOccupiedCells(obs_indices);
-    ss->setInitialPoints(obs_indices);
-    
-    // computes the safety map
-    ss->compute();
-
+    computeSafeGrid(safe_grid);
 
     // plot safety map
     //GridPlotter::plotArrivalTimes(safe_grid, "Safety Grid");
@@ -75,52 +91,33 @@ int main(int argc, const char ** argv)
     /// Compute Distance Map //
     ///////////////////////////
 
-    // Create distance solver
-    Solver<FMGrid2D> * sd = new FMM<FMGrid2D>("FMM_Dist");
     FMGrid2D dist_grid;
     MapLoader::loadMapFromImg(filename.c_str(), dist_grid);
-    // establishes grid type as dist_grid and "cleans" each cell in grid
-    // "cleaning" sets default value of -1 for each cell, does not change its occupancy
-    sd->setEnvironment(&dist_grid);
+    computeDistGrid(dist_grid);
 
-    // sets starting and end points given their coords on grid
-    sd->setInitialAndGoalPoints(start_coord, goal_coord);
-    //sd->setInitialPoints(start_coord);
-
-    // computes the distances map
-    sd->compute();
-
-    std::cout << "Initial Distance Goal Pt\n";
-    unsigned int goal_idx;
-    dist_grid.coord2idx(goal_coord, goal_idx);
-    std::cout << dist_grid[goal_idx];
+    //////////////////////////
+    // Compute Weighted Map //
+    //////////////////////////
+    FMGrid2D w_grid;
+    MapLoader::loadMapFromImg(filename.c_str(), w_grid);
+    for (unsigned int i = 0; i < safe_grid.size(); i++) {
+        w_grid[i].setArrivalTime((safe_grid[i].getArrivalTime() + dist_grid[i].getArrivalTime())/2.0);
+    }    
 
     // plot distance map
     //GridPlotter::plotArrivalTimes(dist_grid, "Distance Grid");
 
-    ////////////////////////////////////
-    // Adjust Distance Map by weights //
-    ////////////////////////////////////
-
-    for (unsigned int i = 0; i < dist_grid.size(); i++) {
-        if(safe_grid[i].getVelocity() != 0) {     
-            dist_grid[i].setArrivalTime(((1-safe_grid[i].getArrivalTime()) + dist_grid[i].getArrivalTime())/2.0);
-        }    
-    }
-
-    std::cout << "Weighted Distance Goal Pt\n";
-    std::cout << dist_grid[goal_idx];
-
     // plot weighted map
-    GridPlotter::plotArrivalTimes(dist_grid, "Weighted Grid");
+    GridPlotter::plotArrivalTimes(w_grid, "Distance Grid");
 
-    ////////////////////
-    // Calculate Path //
-    ////////////////////
-    Path2D path;
-    std::vector<double> path_vels;
-    //computePath(ss, &path, &path_vels);
-    //GridPlotter::plotArrivalTimesPath(dist_grid, path);
+    std::cout << "Max Safe Value: " << safe_grid.getMaxValue() << "\n";
+    std::cout << "Max Safe Speed (Occ Value): " << safe_grid.getMaxSpeed() << "\n";
+    std::cout << "Average Safety: " << safe_grid.getAvgSpeed() << "\n";
+
+    std::cout << "Max Dist Value: " << dist_grid.getMaxValue() << "\n";
+    std::cout << "Max Dist Speed (Occ Value): " << dist_grid.getMaxSpeed() << "\n";
+    std::cout << "Average Dist: " << dist_grid.getAvgSpeed() << "\n";
+
 
     /*
     // print grid size
@@ -131,19 +128,27 @@ int main(int argc, const char ** argv)
 
     //std::cout << "\tElapsed "<< sd->getName() <<" time: " << sd->getTime() << " ms" << '\n';
 
+
+    //Path2D path;
+    //std::vector<double> path_vels;
+    // determines the path & path velocities based on the minimum of the times of
+    // the arrival map
+    //s->as<FM2<FMGrid2D>>()->computePath(&path, &path_vels);
     
-    std::cout << "Path coordinates:\n";
+    //GridPlotter::plotArrivalTimesPath(dist_grid, path);
+
+    /*
+    //std::cout << "Path coordinates:\n";
     std::cout << "Path Values:\n";    
     for (int i = 0; i < path_vels.size(); i++) {
-        std::cout << "{" << path[i][0] << ", " << path[i][1] << "}, ";
-        //std::cout << "[" << path_vels[i] << "], ";    
+        //std::cout << "{" << path[i][0] << ", " << path[i][1] << "}, ";
+        std::cout << "[" << path_vels[i] << "], ";    
     }
     std::cout << "\n";
-    
+    */
 
     // Preventing memory leaks.
-    delete sd;
-    delete ss;
+    //delete sd;
 
     return 0;
 }

@@ -25,8 +25,8 @@ int main()
     // Grid, start and goal definition.
     Coord2D dimsize {300,300};
     FMGrid2D grid_fmm (dimsize);
-    Coord2D init_point = {150, 150};
-    Coord2D goal_point = {250, 250};
+    Coord2D init_point = {3800, 6600};
+    Coord2D goal_point = {7125, 3600};
 
     // Solvers declaration.
     Solver<FMGrid2D> * s = new FMM<FMGrid2D>("FMM");

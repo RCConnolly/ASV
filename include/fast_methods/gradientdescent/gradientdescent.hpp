@@ -65,7 +65,6 @@ template <class grid_t> class GradientDescent {
            black border around the map image. */
       static void apply
       (grid_t & grid, unsigned int & idx, Path & path, std::vector <double> & path_velocity, double step = 1) {
-
           Coord current_coord;
           Point current_point;
           Coord dimsize = grid.getDimSizes();
@@ -79,7 +78,6 @@ template <class grid_t> class GradientDescent {
           std::copy_n( current_coord.begin(), ndims_, current_point.begin() ); // Cast to int.
           path.push_back(current_point);
           path_velocity.push_back(grid[idx].getVelocity());
-
           std::array<double, ndims_> grads;
 
           while(grid[idx].getArrivalTime() != 0) {
@@ -111,12 +109,13 @@ template <class grid_t> class GradientDescent {
               path_velocity.push_back(grid[idx].getVelocity());
               grid.coord2idx(current_coord,idx);
           }
+
           //Adding exactly the last point at the end.
           grid.idx2coord(idx, current_coord);
           std::copy_n( current_coord.begin(), ndims_, current_point.begin() ); // Cast to double.
           path.push_back(current_point);
           path_velocity.push_back(grid[idx].getVelocity());
-      }
+    }
 };
 
 #endif /* GRADIENTDESCENT_H_*/

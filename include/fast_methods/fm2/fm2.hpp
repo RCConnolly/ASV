@@ -130,7 +130,7 @@ template < class grid_t, class heap_t = FMDaryHeap<FMCell> > class FM2 : public 
                 maxVelocity = maxDistance_ / grid_->getLeafSize();
 
             for (unsigned int i = 0; i < grid_->size(); ++i) {
-                double vel = 1.5*(grid_->getCell(i).getValue() / maxValue);
+                double vel = grid_->getCell(i).getValue() / maxValue;
 
                 if (maxDistance_ != -1)
                     if (vel < maxVelocity)
@@ -145,6 +145,7 @@ template < class grid_t, class heap_t = FMDaryHeap<FMCell> > class FM2 : public 
                 grid_->getCell(i).setState(FMState::OPEN);
                 grid_->setClean(true);
             }
+
             end_ = std::chrono::steady_clock::now();
             time_vels_ += std::chrono::duration_cast<std::chrono::milliseconds>(end_-start_).count();
         }

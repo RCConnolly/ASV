@@ -24,3 +24,6 @@ Makefile
 # File Copies
 *~
 
+# Path generatd files
+*/path.txt
+

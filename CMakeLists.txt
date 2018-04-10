@@ -7,11 +7,6 @@ if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
 
-set(BUILD_EXAMPLES true CACHE STRING "True (default) to build examples")
-if(BUILD_EXAMPLES)
-    message(STATUS "Examples are being built and installed.")
-endif(BUILD_EXAMPLES)
-
 # Select flags.
 set(CMAKE_CXX_FLAGS "-std=c++11")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g")
@@ -55,11 +50,10 @@ target_link_libraries(fast_methods
     ${CImg_SYSTEM_LIBS}
 )
 
+# Add FM2 capabilities
+add_executable(FM2 examples/currentFM2.cpp)
 
-# Create main example
-if(BUILD_EXAMPLES)
-    add_subdirectory(examples)
-endif(BUILD_EXAMPLES)
+target_link_libraries(FM2 fast_methods)
 
 # Install section
 # We are not using CMakePackageConfigHelpers because CIMG variables are lists

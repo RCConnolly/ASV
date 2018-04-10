@@ -75,7 +75,10 @@ void computePath(Path & path, const Point & start, const Point & goal, const std
     FMGrid grid_fm2;
 
     // Solver declaration.
-    Solver<FMGrid> * s = new FM2<FMGrid>("FM2_Dary");
+    // HARD CODED MAX DISTANCE
+    // MODIFY SO THAT IT IS 60m based on image resolution
+    double maxDist = 8; // maxDist = 2*(60m/pixel_res)/sqrt(2)
+    Solver<FMGrid> * s = new FM2<FMGrid>("FM2_Dary", maxDist);
    
     // fills in occupancy grid    
     MapLoader::loadMapFromImg(filename.c_str(), grid_fm2);

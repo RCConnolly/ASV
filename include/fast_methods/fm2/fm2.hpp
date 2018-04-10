@@ -126,12 +126,14 @@ template < class grid_t, class heap_t = FMDaryHeap<FMCell> > class FM2 : public 
             double maxValue = grid_->getMaxValue();
             double maxVelocity = 0;
 
-            if (maxDistance_ != -1)
+            if (maxDistance_ != -1) {
                 maxVelocity = maxDistance_ / grid_->getLeafSize();
+                std::cout << "Max Distance is " << maxDistance_ << "\n";
+            }
 
             for (unsigned int i = 0; i < grid_->size(); ++i) {
                 double dist = grid_->getCell(i).getValue();                
-                double vel =  dist/ maxValue;
+                double vel =  dist/maxValue;
 
                 if (maxDistance_ != -1)
                     if (dist < maxDistance_)

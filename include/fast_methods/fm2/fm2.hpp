@@ -130,11 +130,12 @@ template < class grid_t, class heap_t = FMDaryHeap<FMCell> > class FM2 : public 
                 maxVelocity = maxDistance_ / grid_->getLeafSize();
 
             for (unsigned int i = 0; i < grid_->size(); ++i) {
-                double vel = grid_->getCell(i).getValue() / maxValue;
+                double dist = grid_->getCell(i).getValue();                
+                double vel =  dist/ maxValue;
 
                 if (maxDistance_ != -1)
-                    if (vel < maxVelocity)
-                        grid_->getCell(i).setVelocity(vel / maxVelocity);
+                    if (dist < maxDistance_)
+                        grid_->getCell(i).setVelocity(dist / maxDistance_);
                     else
                         grid_->getCell(i).setVelocity(1);
                 else

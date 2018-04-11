@@ -85,16 +85,16 @@ int main(int argc, const char ** argv)
     computeSafeGrid(safe_grid);
 
     // plot safety map
-    //GridPlotter::plotArrivalTimes(safe_grid, "Safety Grid");
+    GridPlotter::plotArrivalTimes(safe_grid, "Safety Grid");
 
     ///////////////////////////
     /// Compute Distance Map //
     ///////////////////////////
-
+    /*
     FMGrid2D dist_grid;
     MapLoader::loadMapFromImg(filename.c_str(), dist_grid);
     computeDistGrid(dist_grid);
-
+    
     //////////////////////////
     // Compute Weighted Map //
     //////////////////////////
@@ -109,7 +109,7 @@ int main(int argc, const char ** argv)
 
     // plot weighted map
     GridPlotter::plotArrivalTimes(w_grid, "Distance Grid");
-
+    
     std::cout << "Max Safe Value: " << safe_grid.getMaxValue() << "\n";
     std::cout << "Max Safe Speed (Occ Value): " << safe_grid.getMaxSpeed() << "\n";
     std::cout << "Average Safety: " << safe_grid.getAvgSpeed() << "\n";

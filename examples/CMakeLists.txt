@@ -12,7 +12,7 @@ find_package(fast_methods)
 include_directories(${fast_methods_INCLUDE_DIRS})
 
 add_executable(current currentFM2.cpp)
-#add_executable(fm2 test_fm2.cpp)
+#add_executable(fm2 myFM2.cpp)
 
 target_link_libraries(current
     ${fast_methods_LIBRARIES}

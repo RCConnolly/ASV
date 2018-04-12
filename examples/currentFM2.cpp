@@ -17,6 +17,8 @@
 #include <fast_methods/io/gridplotter.hpp>
 #include <fast_methods/io/gridwriter.hpp>
 
+#include <GeographicLib/GeoCoords.hpp>
+
 
 // Establish Grid & Path Dimensionality to 2
 constexpr unsigned int nDims = 2;
@@ -94,7 +96,7 @@ void computePath(Path & path, const Point & start, const Point & goal, const std
 
     std::vector<double> path_vels;
     s->as<FM2<FMGrid>>()->computePath(&path, &path_vels);
-    GridPlotter::plotArrivalTimesPath(grid_fm2, path);
+    //GridPlotter::plotArrivalTimesPath(grid_fm2, path);
 
     // Preventing memory leaks.
     delete s;
@@ -176,6 +178,11 @@ int main(int argc, const char ** argv)
     const int width = 1316;
     const int height = 1023;
     const char image_zone[] = "18n";
+
+    
+    GeographicLib::GeoCoords origin(18, true, left, bottom);
+    std::cout << "Converting bottom left to Lat/Long\n";
+    std::cout << origin.GeoRepresentation() << "\n";
     
     // Read POINTS_FILENAME for zone+hemisphere, easting, northing of start & goal
     std::ifstream points_file(argv[2]);

@@ -30,6 +30,15 @@ else()
     message(FATAL_ERROR "CImg NOT FOUND. Please install it following the instructions on the README file.")
 endif()
 
+# Finding GeographicLib
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+find_package(GeographicLib 1.34 REQUIRED)
+if(GeographicLib_FOUND)
+    include_directories (${GeographicLib_INCLUDE_DIRS})
+else()
+    message(FATAL_ERROR "GeographicLib NOT FOUND. Please install it following the instructions on the README file.")
+endif()
+
 # Self-made includes
 include_directories (
     ${Boost_INCLUDE_DIRS}
@@ -48,10 +57,11 @@ add_library(fast_methods SHARED
 target_link_libraries(fast_methods
     ${Boost_LIBRARIES}
     ${CImg_SYSTEM_LIBS}
+    ${GeographicLib_LIBRARIES}
 )
 
 # Add FM2 capabilities
-add_executable(FM2 examples/currentFM2.cpp)
+ add_executable(FM2 examples/currentFM2.cpp)
 
 target_link_libraries(FM2 fast_methods)
 

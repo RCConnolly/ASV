@@ -27,33 +27,36 @@ typedef typename std::array<double, nDims> Point;
 typedef typename std::array<unsigned int, nDims> Coord;
 typedef typename std::vector<Point> Path;
 
+// Establish global constants
+const double IMG_NORTHING = 3836014;
+const double IMG_EASTING  = 340154;
+const int IMG_WIDTH = 1316;
+const int IMG_HEIGHT = 1023;
+const char IMG_ZONE[] = "18n";
+
 /* Converts point coordinates from UTM northing & easting in decimal degrees
  * to image (x,y) coordinates with the bottom left corner of the image being
  * (0,0) and the x & y axes increasing to the right & upward respectively.
  * Parameters:
  *      utm_pt = {northing, easting} coordinates of point
- *      bottom = northing of image's bottom extent
- *      left   = easting of image's left extent
- *      width  = number of pixels that the image is wide
- *      height = number of pixels that the image is high
  * Returns: none
 */
-Point utm2image(Point & utm_pt, const double bottom, const double left, const int width, const int height) {
+Point utm2image(Point & utm_pt) {
     
-    assert(utm_pt[0] > bottom);
-    assert(utm_pt[1] > left);
+    assert(utm_pt[0] > IMG_NORTHING);
+    assert(utm_pt[1] > IMG_EASTING);
 
-    double  y_img = utm_pt[0] - bottom;
-    double  x_img = utm_pt[1] - left;
+    double  y_img = utm_pt[0] - IMG_NORTHING;
+    double  x_img = utm_pt[1] - IMG_EASTING;
 
-    if(x_img >= width) {
+    if(x_img >= IMG_WIDTH) {
         //std::cout << "Converted image x-coordinate" << x_img << " out of range\n";
         //std::cout << "utm[1]: " << utm_pt[1] << "\n";
-        //std::cout << "left: " << left << "\n";
+        //std::cout << "IMG_EASTING: " << IMG_EASTING << "\n";
         exit(EXIT_FAILURE);
     }
 
-    if(y_img >= height) {
+    if(y_img >= IMG_HEIGHT) {
         //std::cout << "Converted image y-coordinate out of range\n";
         exit(EXIT_FAILURE);
     }
@@ -96,7 +99,7 @@ void computePath(Path & path, const Point & start, const Point & goal, const std
 
     std::vector<double> path_vels;
     s->as<FM2<FMGrid>>()->computePath(&path, &path_vels);
-    //GridPlotter::plotArrivalTimesPath(grid_fm2, path);
+    GridPlotter::plotArrivalTimesPath(grid_fm2, path);
 
     // Preventing memory leaks.
     delete s;
@@ -108,9 +111,6 @@ void computePath(Path & path, const Point & start, const Point & goal, const std
 // Prints each path point a file, with coordinates being in Lat/Long
 void printUTMPath(Path & path, const char * fname) {
     
-    const double bottom = 3836014;
-    const double left   = 340154;
-
     std::ofstream ofs(fname);
 
     if(ofs.is_open()) {
@@ -118,8 +118,8 @@ void printUTMPath(Path & path, const char * fname) {
             //convert to utm before printing
             ofs << "18n "; // zone
             ofs.precision(10);
-            ofs << (path[i][1]+bottom) << " "; // northing
-            ofs << (path[i][0]+left) << "\n";  // easting
+            ofs << (path[i][1]+IMG_NORTHING) << " "; // northing
+            ofs << (path[i][0]+IMG_EASTING) << "\n";  // easting
         }
     }
     else {
@@ -127,6 +127,11 @@ void printUTMPath(Path & path, const char * fname) {
         exit(EXIT_FAILURE);
     }
 }
+
+/*
+void printWaypoints(Path & path, const char * fname) {
+}
+*/
 
 
 
@@ -173,14 +178,8 @@ int main(int argc, const char ** argv)
     //////////////////////////
     // hard coding values for channels_updated.png image
     std::string image_name = argv[1];
-    const double bottom = 3836014;
-    const double left   = 340154;
-    const int width = 1316;
-    const int height = 1023;
-    const char image_zone[] = "18n";
-
     
-    GeographicLib::GeoCoords origin(18, true, left, bottom);
+    GeographicLib::GeoCoords origin(18, true, IMG_EASTING, IMG_NORTHING);
     std::cout << "Converting bottom left to Lat/Long\n";
     std::cout << origin.GeoRepresentation() << "\n";
     
@@ -192,7 +191,7 @@ int main(int argc, const char ** argv)
         // Set starting point & check its UTM zone
         char start_zone[4];
         points_file.get(start_zone, 4); // reads in zone (2 digits, 1 letter)
-        checkZone(start_zone, image_zone);
+        checkZone(start_zone, IMG_ZONE);
         points_file.get(); // moves passed white space after zone
         //std::cout << "start point -- ";
         start = getPoint(&points_file);
@@ -200,7 +199,7 @@ int main(int argc, const char ** argv)
         // Set goal point & check its UTM zone
         char goal_zone[4];
         points_file.get(goal_zone, 4);
-        checkZone(goal_zone, image_zone);
+        checkZone(goal_zone, IMG_ZONE);
         points_file.get(); // moves passed white space after zone
         //std::cout << "end point -- ";
         goal  = getPoint(&points_file);
@@ -212,8 +211,8 @@ int main(int argc, const char ** argv)
     points_file.close();
 
     // Convert start & goal coordinates to image coordinates
-    Point startImg = utm2image(start, bottom, left, width, height);
-    Point goalImg  = utm2image(goal,  bottom, left, width, height);
+    Point startImg = utm2image(start);
+    Point goalImg  = utm2image(goal);
     //std::cout << "start: {" << start_coord[0] << "," << start_coord[1] << "}\n";
     //std::cout << "goal: {" << goal_coord[0] << "," << goal_coord[1] << "}\n";
 

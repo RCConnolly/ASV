@@ -112,7 +112,7 @@ void computePath(Path & path, const Point & start, const Point & goal, const std
 
     std::vector<double> path_vels;
     s->as<FM2<FMGrid>>()->computePath(&path, &path_vels);
-    GridPlotter::plotArrivalTimesPath(grid_fm2, path);
+    //GridPlotter::plotArrivalTimesPath(grid_fm2, path);
 
     // Preventing memory leaks.
     delete s;

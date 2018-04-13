@@ -27,3 +27,7 @@ Makefile
 # Path generatd files
 */path.txt
 
+# Build folders and their files
+build/*
+full_build/*
+

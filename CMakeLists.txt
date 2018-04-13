@@ -61,7 +61,7 @@ target_link_libraries(fast_methods
 )
 
 # Add FM2 capabilities
- add_executable(FM2 examples/currentFM2.cpp)
+add_executable(FM2 examples/currentFM2.cpp)
 
 target_link_libraries(FM2 fast_methods)
 

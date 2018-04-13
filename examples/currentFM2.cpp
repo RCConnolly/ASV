@@ -5,6 +5,7 @@
 #include <fstream>
 #include <array>
 #include <string>
+#include <cmath>
 
 #include <fast_methods/ndgridmap/fmcell.h>
 #include <fast_methods/ndgridmap/ndgridmap.hpp>
@@ -32,7 +33,19 @@ const double IMG_NORTHING = 3836014;
 const double IMG_EASTING  = 340154;
 const int IMG_WIDTH = 1316;
 const int IMG_HEIGHT = 1023;
-const char IMG_ZONE[] = "18n";
+const char IMG_ZONE_STR[] = "18n";
+const int IMG_ZONE = 18;
+const bool IMG_isNORTH = true;
+const char MAV_VERSION[] = "110";
+const int  MAV_FRAME = 0; // 0 = MAV_FRAME_GlOBAL, WGS84 coordinate system https://github.com/mavlink/mavlink/blob/master/message_definitions/v1.0/common.xml
+const int MAV_CMD = 16; // 16 = MAV_CMD_NAV_WAYPOINT, same message definition url as above
+const double HOLD_TIME = 0; // in seconds
+const double WP_RADIUS = 10; // in meters
+const double PASS_BY_DIST = 0; // distance in meters that ASV should pass by the waypoint
+const float ROTARY_WING_YAW = NAN;
+const double ALTITUDE = 0;
+long unsigned int POINT_DIST = 2;
+
 
 /* Converts point coordinates from UTM northing & easting in decimal degrees
  * to image (x,y) coordinates with the bottom left corner of the image being
@@ -128,10 +141,44 @@ void printUTMPath(Path & path, const char * fname) {
     }
 }
 
-/*
+
 void printWaypoints(Path & path, const char * fname) {
+    
+    std::ofstream ofs(fname);
+
+    if(ofs.is_open()) {
+        ofs << "QGC WPL " << MAV_VERSION << "\n";
+        int idx = 0;
+        bool current_wp = 1;
+        bool continue_auto = 1;
+
+        ofs.precision(10);
+        typename GeographicLib::GeoCoords curr_wp;
+        for(size_t i = 0; i < path.size(); i++) {
+            if(i%POINT_DIST == 0) {            
+                ofs << idx << "\t" << current_wp << "\t";
+                ofs << HOLD_TIME << "\t"; // PARAM 1
+                ofs << WP_RADIUS << "\t"; // PARAM 2
+                ofs << PASS_BY_DIST << "\t"; // PARAM 3
+                ofs << ROTARY_WING_YAW << "\t"; // PARAM 4
+                
+                curr_wp.Reset(IMG_ZONE, IMG_isNORTH, path[i][0]+IMG_EASTING, path[i][1]+IMG_NORTHING);
+                ofs << curr_wp.Latitude() << "\t";
+                ofs << curr_wp.Longitude() << "\t";
+                ofs << ALTITUDE << "\t";
+                ofs << continue_auto << "\n";
+            }
+        }
+    }
+    else {
+        std::cout << "Unable to open file\n";
+        exit(EXIT_FAILURE);
+    }
+
+    ofs.close();
+
 }
-*/
+
 
 
 
@@ -178,10 +225,7 @@ int main(int argc, const char ** argv)
     //////////////////////////
     // hard coding values for channels_updated.png image
     std::string image_name = argv[1];
-    
-    GeographicLib::GeoCoords origin(18, true, IMG_EASTING, IMG_NORTHING);
-    std::cout << "Converting bottom left to Lat/Long\n";
-    std::cout << origin.GeoRepresentation() << "\n";
+
     
     // Read POINTS_FILENAME for zone+hemisphere, easting, northing of start & goal
     std::ifstream points_file(argv[2]);
@@ -191,7 +235,7 @@ int main(int argc, const char ** argv)
         // Set starting point & check its UTM zone
         char start_zone[4];
         points_file.get(start_zone, 4); // reads in zone (2 digits, 1 letter)
-        checkZone(start_zone, IMG_ZONE);
+        checkZone(start_zone, IMG_ZONE_STR);
         points_file.get(); // moves passed white space after zone
         //std::cout << "start point -- ";
         start = getPoint(&points_file);
@@ -199,7 +243,7 @@ int main(int argc, const char ** argv)
         // Set goal point & check its UTM zone
         char goal_zone[4];
         points_file.get(goal_zone, 4);
-        checkZone(goal_zone, IMG_ZONE);
+        checkZone(goal_zone, IMG_ZONE_STR);
         points_file.get(); // moves passed white space after zone
         //std::cout << "end point -- ";
         goal  = getPoint(&points_file);
@@ -221,7 +265,7 @@ int main(int argc, const char ** argv)
     computePath(path, startImg, goalImg, image_name);
 
     // Print path to a file
-    printUTMPath(path, "path.txt");
+    printWaypoints(path, "path.txt");
 
 
     return EXIT_SUCCESS;

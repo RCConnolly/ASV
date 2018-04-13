@@ -40,9 +40,9 @@ const char MAV_VERSION[] = "110";
 const int  MAV_FRAME = 0; // 0 = MAV_FRAME_GlOBAL, WGS84 coordinate system https://github.com/mavlink/mavlink/blob/master/message_definitions/v1.0/common.xml
 const int MAV_CMD = 16; // 16 = MAV_CMD_NAV_WAYPOINT, same message definition url as above
 const double HOLD_TIME = 0; // in seconds
-const double WP_RADIUS = 10; // in meters
+const double WP_RADIUS = 5; // in meters
 const double PASS_BY_DIST = 0; // distance in meters that ASV should pass by the waypoint
-const float ROTARY_WING_YAW = NAN;
+const float ROTARY_WING_YAW = 0; // or NAN?
 const double ALTITUDE = 0;
 long unsigned int POINT_DIST = 2;
 
@@ -156,7 +156,10 @@ void printWaypoints(Path & path, const char * fname) {
         typename GeographicLib::GeoCoords curr_wp;
         for(size_t i = 0; i < path.size(); i++) {
             if(i%POINT_DIST == 0) {            
-                ofs << idx << "\t" << current_wp << "\t";
+                ofs << idx << "\t";
+                ofs << current_wp << "\t";
+                ofs << MAV_FRAME << "\t";
+                ofs << MAV_CMD << "\t";
                 ofs << HOLD_TIME << "\t"; // PARAM 1
                 ofs << WP_RADIUS << "\t"; // PARAM 2
                 ofs << PASS_BY_DIST << "\t"; // PARAM 3
@@ -167,6 +170,8 @@ void printWaypoints(Path & path, const char * fname) {
                 ofs << curr_wp.Longitude() << "\t";
                 ofs << ALTITUDE << "\t";
                 ofs << continue_auto << "\n";
+                idx++;
+                current_wp = 0;
             }
         }
     }

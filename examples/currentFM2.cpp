@@ -20,6 +20,9 @@
 
 #include <GeographicLib/GeoCoords.hpp>
 
+#include "gdal_priv.h"
+#include "cpl_conv.h"
+
 using namespace GeographicLib;
 
 
@@ -216,6 +219,37 @@ GeoCoords getGeoCoords(std::ifstream * f) {
     return pt;
 }
 
+void setImageConstants(std::string fname) {
+    GDALDataset * poDataset;
+ 
+    GDALAllRegister();
+
+    poDataset = (GDALDataset *) GDALOpen( fname, GA_ReadOnly );
+    if( poDataset == NULL )
+    {
+       std::cout << "Unable to open GDALDataset from filename " << fname << "\n";
+       exit(EXIT_FAILURE);
+    }
+
+    double adfGeoTransform[6];
+    printf( "Driver: %s/%s\n",
+        poDataset->GetDriver()->GetDescription(),
+        poDataset->GetDriver()->GetMetadataItem( GDAL_DMD_LONGNAME ) );
+    printf( "Size is %dx%dx%d\n",
+        poDataset->GetRasterXSize(), poDataset->GetRasterYSize(),
+        poDataset->GetRasterCount() );
+    if( poDataset->GetProjectionRef()  != NULL ) {
+        printf( "Projection is `%s'\n", poDataset->GetProjectionRef() );
+    }   
+    if( poDataset->GetGeoTransform( adfGeoTransform ) == CE_None ) {
+    printf( "Origin = (%.6f,%.6f)\n",
+            adfGeoTransform[0], adfGeoTransform[3] );
+    printf( "Pixel Size = (%.6f,%.6f)\n",
+            adfGeoTransform[1], adfGeoTransform[5] );
+    }
+
+}
+
 
 // Input format:
 // IMAGE_FILENAME POINTS_FILENAME
@@ -232,7 +266,9 @@ int main(int argc, const char ** argv)
     // NEED TO IMPLEMENT
     //////////////////////////
     // hard coding values for channels_updated.png image
+
     std::string image_name = argv[1];
+    setImageConstants(image_name);
 
     
     // Read POINTS_FILENAME for zone+hemisphere, easting, northing of start & goal

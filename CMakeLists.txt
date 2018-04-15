@@ -39,6 +39,15 @@ else()
     message(FATAL_ERROR "GeographicLib NOT FOUND. Please install it following the instructions on the README file.")
 endif()
 
+# Finding GDAL
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+find_package(GDAL)
+if(GDAL_FOUND)
+    include_directories (${GDAL_INCLUDE_DIR})
+else()
+    message(FATAL_ERROR "GDAL NOT FOUND. Please install it following the instructions on the README file.")
+endif()
+
 # Self-made includes
 include_directories (
     ${Boost_INCLUDE_DIRS}
@@ -58,6 +67,7 @@ target_link_libraries(fast_methods
     ${Boost_LIBRARIES}
     ${CImg_SYSTEM_LIBS}
     ${GeographicLib_LIBRARIES}
+    ${GDAL_LIBRARY}
 )
 
 # Add FM2 capabilities

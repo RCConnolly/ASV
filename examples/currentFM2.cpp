@@ -28,8 +28,8 @@ constexpr unsigned int nDims = 2;
 typedef nDGridMap<FMCell, nDims> FMGrid;
 typedef typename std::array<double, nDims> Point;
 typedef typename std::array<unsigned int, nDims> Coord;
-//typedef typename std::vector<Point> Path;
-typedef typename std::vector<GeoCoords> Path;
+typedef typename std::vector<Point> Path;
+//typedef typename std::vector<GeoCoords> Path;
 
 // Establish global constants
 const double IMG_NORTHING = 3836014;
@@ -41,7 +41,7 @@ const char IMG_ZONE_STR[] = "18n";
 const int IMG_ZONE = 18;
 const bool IMG_isNORTH = true;
 const int SAFE_DIST = 60; // meters
-const int SAFE_CELL_DIST = ceil((2*(SAFE_DIST/pixel_res))/sqrt(2));
+const int SAFE_CELL_DIST = ceil((2*(SAFE_DIST/IMG_RES))/sqrt(2));
 const char MAV_VERSION[] = "110";
 const int  MAV_FRAME = 0; // 0 = MAV_FRAME_GlOBAL, WGS84 coordinate system https://github.com/mavlink/mavlink/blob/master/message_definitions/v1.0/common.xml
 const int MAV_CMD = 16; // 16 = MAV_CMD_NAV_WAYPOINT, same message definition url as above
@@ -62,21 +62,21 @@ long unsigned int POINT_DIST = 2;
 */
 Point utm2image(GeoCoords & utm_pt) {
     
-    assert(utm_pt.Northing() > IMG_NORTHING);
-    assert(utm_pt.Easting() > IMG_EASTING);
+    double  x_img = (utm_pt.Easting() - IMG_EASTING)/IMG_RES;
+    double  y_img = (utm_pt.Northing() - IMG_NORTHING)/IMG_RES;
 
-    double  y_img = utm_pt.Northing() - IMG_NORTHING;
-    double  x_img = utm_pt.Easting() - IMG_EASTING;
+    assert(x_img > 0);
+    assert(y_img > 0);
 
     if(x_img >= IMG_WIDTH) {
-        //std::cout << "Converted image x-coordinate" << x_img << " out of range\n";
-        //std::cout << "utm[1]: " << utm_pt[1] << "\n";
-        //std::cout << "IMG_EASTING: " << IMG_EASTING << "\n";
+        std::cout << "Converted image x-coordinate" << x_img;
+        std::cout << "exceeds image width " << IMG_WIDTH << "\n";
         exit(EXIT_FAILURE);
     }
 
     if(y_img >= IMG_HEIGHT) {
-        //std::cout << "Converted image y-coordinate out of range\n";
+        std::cout << "Converted image y-coordinate " << y_img;
+        std::cout << "exceeds image height " << IMG_HEIGHT << "\n";
         exit(EXIT_FAILURE);
     }
 
@@ -114,8 +114,8 @@ void computePath(Path & path, const Point & start, const Point & goal, const std
     s->compute();
 
     std::vector<double> path_vels;
-    s->as<FM2<FMGrid>>()->computePath(&path, &path_vels);
-    GridPlotter::plotArrivalTimesPath(grid_fm2, path);
+    s->as<FM2 <FMGrid> >()->computePath(&path, &path_vels);
+    //GridPlotter::plotArrivalTimesPath(grid_fm2, path);
 
     // Preventing memory leaks.
     delete s;
@@ -173,7 +173,7 @@ void printWaypoints(Path & path, const char * fname) {
         bool continue_auto = 1;
 
         ofs.precision(10);
-        typename GeoCoords curr_wp;
+        GeoCoords curr_wp;
         for(size_t i = 0; i < path.size(); i++) {
             if(i%POINT_DIST == 0) {            
                 ofs << idx << "\t";
@@ -205,25 +205,17 @@ void printWaypoints(Path & path, const char * fname) {
 }
 
 GeoCoords getGeoCoords(std::ifstream * f) {
-    char northing[100];
-    char easting[100];
+    char latitude[50];
+    char longitude[50];
 
-    f->getline(northing, 100, ' ');
-    f->getline(easting, 100, '\n');
+    f->getline(latitude, 50, ' ');
+    f->getline(longitude, 50);
 
-    return GeoCoords(IMG_ZONE, IMG_isNORTH, atof(easting), atof(northing));
+    GeoCoords pt(atof(latitude), atof(longitude), IMG_ZONE);
+
+    return pt;
 }
 
-
-void checkZone(const char * pt_zone, const char * img_zone) {
-    if(strcmp(pt_zone, img_zone)) {
-        std::cout << "ERROR: Point UTM zone (" << pt_zone << ")";
-        std::cout << " does not match image zone(" << img_zone << ")\n";
-        exit(EXIT_FAILURE);
-    }
-    
-    return;
-}
 
 // Input format:
 // IMAGE_FILENAME POINTS_FILENAME
@@ -248,20 +240,7 @@ int main(int argc, const char ** argv)
     GeoCoords start;
     GeoCoords goal;
     if(points_file.is_open()) {
-        // Set starting point & check its UTM zone
-        char start_zone[4];
-        points_file.get(start_zone, 4); // reads in zone (2 digits, 1 letter)
-        checkZone(start_zone, IMG_ZONE_STR);
-        points_file.get(); // moves passed white space after zone
-        //std::cout << "start point -- ";
         start = getGeoCoords(&points_file);
-
-        // Set goal point & check its UTM zone
-        char goal_zone[4];
-        points_file.get(goal_zone, 4);
-        checkZone(goal_zone, IMG_ZONE_STR);
-        points_file.get(); // moves passed white space after zone
-        //std::cout << "end point -- ";
         goal  = getGeoCoords(&points_file);
     }
     else {
@@ -273,18 +252,13 @@ int main(int argc, const char ** argv)
     // Convert start & goal coordinates to image coordinates
     Point startImg = utm2image(start);
     Point goalImg  = utm2image(goal);
-    //std::cout << "start: {" << start_coord[0] << "," << start_coord[1] << "}\n";
-    //std::cout << "goal: {" << goal_coord[0] << "," << goal_coord[1] << "}\n";
-
+   
     // Compute path
     Path path;
     computePath(path, startImg, goalImg, image_name);
 
     // Print path to a file
-    printImgPath(path, "img_path.txt");
-    printUTMPath(path, "utm_path.txt");
     printWaypoints(path, "path.txt");
-
 
     return EXIT_SUCCESS;
 }

@@ -12,7 +12,6 @@
 #include <fast_methods/console/console.h>
 
 #include <fast_methods/fm2/fm2.hpp>
-//#include <fast_methods/fm2/wFM2.hpp>
 
 #include <fast_methods/io/maploader.hpp>
 #include <fast_methods/io/gridplotter.hpp>
@@ -25,6 +24,19 @@
 
 using namespace GeographicLib;
 
+class Image {
+    public:
+    const double EASTING;
+    const double NORTHING;
+    const int WIDTH;
+    const int HEIGHT;
+    const int XRES;
+    const int YRES;
+    const int ZONE;
+    const bool isNORTH;
+    Image(double e, double n, int w, int h, int xres, int yres, int zone, bool is_n) :
+            EASTING(e), NORTHING(n), WIDTH(w), HEIGHT(h), XRES(xres), YRES(yres), ZONE(zone), isNORTH(is_n) {}
+};
 
 // Establish Grid & Path Dimensionality to 2
 constexpr unsigned int nDims = 2;
@@ -35,16 +47,8 @@ typedef typename std::vector<Point> Path;
 //typedef typename std::vector<GeoCoords> Path;
 
 // Establish global constants
-const double IMG_NORTHING = 3836014;
-const double IMG_EASTING  = 340154;
-const int IMG_WIDTH = 1316;
-const int IMG_HEIGHT = 1023;
-const int IMG_RES = 10;
-const char IMG_ZONE_STR[] = "18n";
-const int IMG_ZONE = 18;
-const bool IMG_isNORTH = true;
 const int SAFE_DIST = 60; // meters
-const int SAFE_CELL_DIST = ceil((2*(SAFE_DIST/IMG_RES))/sqrt(2));
+const int SAFE_CELL_DIST = ceil((2*(SAFE_DIST/10))/sqrt(2));
 const char MAV_VERSION[] = "110";
 const int  MAV_FRAME = 0; // 0 = MAV_FRAME_GlOBAL, WGS84 coordinate system https://github.com/mavlink/mavlink/blob/master/message_definitions/v1.0/common.xml
 const int MAV_CMD = 16; // 16 = MAV_CMD_NAV_WAYPOINT, same message definition url as above
@@ -63,23 +67,35 @@ long unsigned int POINT_DIST = 2;
  *      utm_pt = {northing, easting} coordinates of point
  * Returns: none
 */
-Point utm2image(GeoCoords & utm_pt) {
+Point utm2image(GeoCoords & utm_pt, Image & img) {
     
-    double  x_img = (utm_pt.Easting() - IMG_EASTING)/IMG_RES;
-    double  y_img = (utm_pt.Northing() - IMG_NORTHING)/IMG_RES;
+    double  x_img = (utm_pt.Easting() - img.EASTING)/img.XRES;
+    // If y-resolution is negative, the image origin is in top left.
+    // Image coordinates must be in bottom left.    
+    double y_img;    
+    if(img.YRES < 0) {
+        std::cout << "Pt n: " << utm_pt.Northing() << "\n";
+        std::cout << "img n: " << img.NORTHING << "\n";
+        std::cout << "img height: " << img.HEIGHT << "\n";
+        std::cout << "yres: " << img.YRES << "\n";
+        y_img = (utm_pt.Northing() - (img.NORTHING - img.HEIGHT*(-img.YRES)))/(-img.YRES);
+    }
+    else {
+        y_img = (utm_pt.Northing() - img.NORTHING)/img.YRES;
+    }
 
     assert(x_img > 0);
     assert(y_img > 0);
 
-    if(x_img >= IMG_WIDTH) {
+    if(x_img >= img.WIDTH) {
         std::cout << "Converted image x-coordinate" << x_img;
-        std::cout << "exceeds image width " << IMG_WIDTH << "\n";
+        std::cout << "exceeds image width " << img.WIDTH << "\n";
         exit(EXIT_FAILURE);
     }
 
-    if(y_img >= IMG_HEIGHT) {
+    if(y_img >= img.HEIGHT) {
         std::cout << "Converted image y-coordinate " << y_img;
-        std::cout << "exceeds image height " << IMG_HEIGHT << "\n";
+        std::cout << "exceeds image height " << img.HEIGHT << "\n";
         exit(EXIT_FAILURE);
     }
 
@@ -106,14 +122,32 @@ void computePath(Path & path, const Point & start, const Point & goal, const std
    
     // fills in occupancy grid    
     MapLoader::loadMapFromImg(filename.c_str(), grid_fm2);
+    std::array<unsigned int, 2> dims = grid_fm2.getDimSizes();
+    for(unsigned int i = 0; i < dims[0]; i++) {
+        for(unsigned int j = 0; j < dims[1]; j++) {
+            unsigned int idx;
+            grid_fm2.coord2idx({i,j}, idx);
+            if(grid_fm2.getCell(idx).getOccupancy() > 0) {
+                std::cout << "Occupancy(" << idx << "): " << grid_fm2.getCell(idx).getOccupancy() << "\n";
+                grid_fm2.getCell(idx).setOccupancy(1);
+            }
+        }
+    }
     s->setEnvironment(&grid_fm2);
+
+    std::vector<unsigned int> occ;
+    grid_fm2.getOccupiedCells(occ);
+    std::cout << "Num occupied cells: " << occ.size() << "\n";
+
+    std::cout << "Total Cells: " << dims[0]*dims[1] << "\n";
     
     // computes velocities map 
     Coord start_coord = {(unsigned int) start[0], (unsigned int) start[1]};
     Coord goal_coord  = {(unsigned int)  goal[0],  (unsigned int) goal[1]};   
-    //std::cout << "goal coord: " << goal_coord[0] << ", " << goal_coord[1] << "\n";
-    //std::cout << "start coord: " << start_coord[0] <<  ", " << start_coord[1] << "\n";
+    std::cout << "goal coord: " << goal_coord[0] << ", " << goal_coord[1] << "\n";
+    std::cout << "start coord: " << start_coord[0] <<  ", " << start_coord[1] << "\n";
     s->setInitialAndGoalPoints(start_coord, goal_coord);
+    std::cout << "set initial and goal\n";    
     s->compute();
 
     std::vector<double> path_vels;
@@ -128,7 +162,7 @@ void computePath(Path & path, const Point & start, const Point & goal, const std
 
 
 // Prints each path point a file, with coordinates being in Lat/Long
-void printUTMPath(Path & path, const char * fname) {
+void printUTMPath(Path & path, const char * fname, Image & img) {
     
     std::ofstream ofs(fname);
 
@@ -137,8 +171,8 @@ void printUTMPath(Path & path, const char * fname) {
             //convert to utm before printing
             ofs << "18n "; // zone
             ofs.precision(10);
-            ofs << (((path[i][1])*IMG_RES)+IMG_NORTHING) << " "; // northing
-            ofs << (((path[i][0])*IMG_RES)+IMG_EASTING) << "\n";  // easting
+            ofs << (((path[i][1])*img.YRES)+img.NORTHING) << " "; // northing
+            ofs << (((path[i][0])*img.XRES)+img.EASTING) << "\n";  // easting
         }
     }
     else {
@@ -165,7 +199,7 @@ void printImgPath(Path & path, const char * fname) {
 }
 
 
-void printWaypoints(Path & path, const char * fname) {
+void printWaypoints(Path & path, const char * fname, Image & img) {
     
     std::ofstream ofs(fname);
 
@@ -188,7 +222,7 @@ void printWaypoints(Path & path, const char * fname) {
                 ofs << PASS_BY_DIST << "\t"; // PARAM 3
                 ofs << ROTARY_WING_YAW << "\t"; // PARAM 4
                 
-                curr_wp.Reset(IMG_ZONE, IMG_isNORTH, (path[i][0]*IMG_RES)+IMG_EASTING, (path[i][1]*IMG_RES)+IMG_NORTHING);
+                curr_wp.Reset(img.ZONE, img.isNORTH, (path[i][0]*img.XRES)+img.EASTING, (path[i][1]*img.YRES)+img.NORTHING);
                 ofs << curr_wp.Latitude() << "\t";
                 ofs << curr_wp.Longitude() << "\t";
                 ofs << ALTITUDE << "\t";
@@ -214,40 +248,9 @@ GeoCoords getGeoCoords(std::ifstream * f) {
     f->getline(latitude, 50, ' ');
     f->getline(longitude, 50);
 
-    GeoCoords pt(atof(latitude), atof(longitude), IMG_ZONE);
+    GeoCoords pt(atof(latitude), atof(longitude));
 
     return pt;
-}
-
-void setImageConstants(std::string fname) {
-    GDALDataset * poDataset;
- 
-    GDALAllRegister();
-
-    poDataset = (GDALDataset *) GDALOpen( fname, GA_ReadOnly );
-    if( poDataset == NULL )
-    {
-       std::cout << "Unable to open GDALDataset from filename " << fname << "\n";
-       exit(EXIT_FAILURE);
-    }
-
-    double adfGeoTransform[6];
-    printf( "Driver: %s/%s\n",
-        poDataset->GetDriver()->GetDescription(),
-        poDataset->GetDriver()->GetMetadataItem( GDAL_DMD_LONGNAME ) );
-    printf( "Size is %dx%dx%d\n",
-        poDataset->GetRasterXSize(), poDataset->GetRasterYSize(),
-        poDataset->GetRasterCount() );
-    if( poDataset->GetProjectionRef()  != NULL ) {
-        printf( "Projection is `%s'\n", poDataset->GetProjectionRef() );
-    }   
-    if( poDataset->GetGeoTransform( adfGeoTransform ) == CE_None ) {
-    printf( "Origin = (%.6f,%.6f)\n",
-            adfGeoTransform[0], adfGeoTransform[3] );
-    printf( "Pixel Size = (%.6f,%.6f)\n",
-            adfGeoTransform[1], adfGeoTransform[5] );
-    }
-
 }
 
 
@@ -260,16 +263,6 @@ int main(int argc, const char ** argv)
         std::cout << "Not enough arguments given. Use as ./run IMAGE_FILENAME POINTS_FILENAME\n";
         exit(EXIT_FAILURE);
     }
-
-    // Parse GeoTiff image
-    ///////////////////////////
-    // NEED TO IMPLEMENT
-    //////////////////////////
-    // hard coding values for channels_updated.png image
-
-    std::string image_name = argv[1];
-    setImageConstants(image_name);
-
     
     // Read POINTS_FILENAME for zone+hemisphere, easting, northing of start & goal
     std::ifstream points_file(argv[2]);
@@ -285,16 +278,44 @@ int main(int argc, const char ** argv)
     }
     points_file.close();
 
+    // Extract geospatial data from GeoTiff
+    std::string image_name = argv[1];
+    GDALDataset * poDataset;
+    GDALAllRegister();
+    poDataset = (GDALDataset *) GDALOpen(image_name.c_str(), GA_ReadOnly );
+    if( poDataset == NULL )
+    {
+       std::cout << "Unable to open GDALDataset from filename " << image_name << "\n";
+       exit(EXIT_FAILURE);
+    }
+
+    double gt[6];  
+    if(poDataset->GetGeoTransform(gt) != CE_None) {
+        std::cout << "Unable to obtain GeoTiff transform\n";
+        exit(EXIT_FAILURE);
+    }
+
+    assert(start.Zone() == goal.Zone());
+    assert(start.Northp() == goal.Northp());
+
+    Image img(gt[0], gt[3], poDataset->GetRasterXSize(), poDataset->GetRasterYSize(), 
+              gt[1], gt[5], start.Zone(), start.Northp());
+
+    std::cout << "Size: " << img.WIDTH << ", " << img.HEIGHT << "\n";
+    std::cout << "Easting/Northing " << img.EASTING << ", " << img.NORTHING << "\n";
+    std::cout << "Resolution: " << img.XRES << ", " << img.YRES << "\n";
+    std::cout << "Zone, north? " << img.ZONE << ", " << img.isNORTH << "\n";
+
     // Convert start & goal coordinates to image coordinates
-    Point startImg = utm2image(start);
-    Point goalImg  = utm2image(goal);
+    Point startImg = utm2image(start, img);
+    Point goalImg  = utm2image(goal, img);
    
     // Compute path
     Path path;
     computePath(path, startImg, goalImg, image_name);
 
     // Print path to a file
-    printWaypoints(path, "path.txt");
+    printWaypoints(path, "path.txt", img);
 
     return EXIT_SUCCESS;
 }

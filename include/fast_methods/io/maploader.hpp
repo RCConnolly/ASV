@@ -20,7 +20,9 @@
 #ifndef MAPLOADER_H_
 #define MAPLOADER_H_
 
+#define cimg_use_tiff
 #include <CImg.h>
+
 
 #include <fast_methods/ndgridmap/ndgridmap.hpp>
 
@@ -50,7 +52,9 @@ class MapLoader {
         static void loadMapFromImg
         (const char * filename, nDGridMap<T, ndims> & grid) {
             std::vector<unsigned int> obs;
-            CImg<double> img(filename);
+            //CImg<double> img(filename);
+            CImg<double> img;
+            img.load_tiff(filename);
             std::array<unsigned int, ndims> dimsize;
             dimsize[0] = img.width();
             dimsize[1] = img.height();

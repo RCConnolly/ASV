@@ -78,7 +78,7 @@ Point utm2image(GeoCoords & utm_pt, Image & img) {
         std::cout << "img n: " << img.NORTHING << "\n";
         std::cout << "img height: " << img.HEIGHT << "\n";
         std::cout << "yres: " << img.YRES << "\n";
-        y_img = (utm_pt.Northing() - (img.NORTHING - img.HEIGHT*(-img.YRES)))/(-img.YRES);
+        y_img = (utm_pt.Northing() - (img.NORTHING + img.HEIGHT*(img.YRES)))/(-img.YRES);
     }
     else {
         y_img = (utm_pt.Northing() - img.NORTHING)/img.YRES;
@@ -122,6 +122,7 @@ void computePath(Path & path, const Point & start, const Point & goal, const std
    
     // fills in occupancy grid    
     MapLoader::loadMapFromImg(filename.c_str(), grid_fm2);
+    /*
     std::array<unsigned int, 2> dims = grid_fm2.getDimSizes();
     for(unsigned int i = 0; i < dims[0]; i++) {
         for(unsigned int j = 0; j < dims[1]; j++) {
@@ -133,13 +134,14 @@ void computePath(Path & path, const Point & start, const Point & goal, const std
             }
         }
     }
+    */
     s->setEnvironment(&grid_fm2);
 
-    std::vector<unsigned int> occ;
-    grid_fm2.getOccupiedCells(occ);
-    std::cout << "Num occupied cells: " << occ.size() << "\n";
+    //std::vector<unsigned int> occ;
+    //grid_fm2.getOccupiedCells(occ);
+    //std::cout << "Num occupied cells: " << occ.size() << "\n";
 
-    std::cout << "Total Cells: " << dims[0]*dims[1] << "\n";
+    //std::cout << "Total Cells: " << dims[0]*dims[1] << "\n";
     
     // computes velocities map 
     Coord start_coord = {(unsigned int) start[0], (unsigned int) start[1]};
@@ -152,7 +154,7 @@ void computePath(Path & path, const Point & start, const Point & goal, const std
 
     std::vector<double> path_vels;
     s->as<FM2 <FMGrid> >()->computePath(&path, &path_vels);
-    //GridPlotter::plotArrivalTimesPath(grid_fm2, path);
+    GridPlotter::plotArrivalTimesPath(grid_fm2, path);
 
     // Preventing memory leaks.
     delete s;
@@ -221,8 +223,16 @@ void printWaypoints(Path & path, const char * fname, Image & img) {
                 ofs << WP_RADIUS << "\t"; // PARAM 2
                 ofs << PASS_BY_DIST << "\t"; // PARAM 3
                 ofs << ROTARY_WING_YAW << "\t"; // PARAM 4
-                
-                curr_wp.Reset(img.ZONE, img.isNORTH, (path[i][0]*img.XRES)+img.EASTING, (path[i][1]*img.YRES)+img.NORTHING);
+                if(img.YRES < 0) {
+                    curr_wp.Reset(img.ZONE, img.isNORTH,
+                                 (path[i][0]*img.XRES)+img.EASTING,
+                                 (path[i][1]*(-img.YRES) + (img.NORTHING+img.HEIGHT*(img.YRES))));
+                }
+                else {
+                    curr_wp.Reset(img.ZONE, img.isNORTH,
+                                 (path[i][0]*img.XRES)+img.EASTING,
+                                 (path[i][1]*img.YRES)+img.NORTHING);
+                }
                 ofs << curr_wp.Latitude() << "\t";
                 ofs << curr_wp.Longitude() << "\t";
                 ofs << ALTITUDE << "\t";
@@ -312,7 +322,7 @@ int main(int argc, const char ** argv)
    
     // Compute path
     Path path;
-    computePath(path, startImg, goalImg, image_name);
+    computePath(path, startImg, goalImg, image_name.substr(0, image_name.length()-3) += "png");
 
     // Print path to a file
     printWaypoints(path, "path.txt", img);

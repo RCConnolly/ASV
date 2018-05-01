@@ -71,9 +71,9 @@ target_link_libraries(fast_methods
 )
 
 # Add FM2 capabilities
-add_executable(FM2 examples/currentFM2.cpp)
+add_executable(computePath computePath.cpp)
 
-target_link_libraries(FM2 fast_methods)
+target_link_libraries(computePath fast_methods)
 
 # Install section
 # We are not using CMakePackageConfigHelpers because CIMG variables are lists

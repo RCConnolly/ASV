@@ -6,6 +6,8 @@
 #include <array>
 #include <string>
 #include <cmath>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include <fast_methods/ndgridmap/fmcell.h>
 #include <fast_methods/ndgridmap/ndgridmap.hpp>
@@ -22,8 +24,9 @@
 #include "gdal_priv.h"
 #include "cpl_conv.h"
 
-using namespace GeographicLib;
+using namespace GeographicLib; // For coordinate system conversions
 
+// Class containing fields GeoTiff data necessary for coordinate convertions
 class Image {
     public:
     const double EASTING;
@@ -44,40 +47,19 @@ typedef nDGridMap<FMCell, nDims> FMGrid;
 typedef typename std::array<double, nDims> Point;
 typedef typename std::array<unsigned int, nDims> Coord;
 typedef typename std::vector<Point> Path;
-//typedef typename std::vector<GeoCoords> Path;
-
-// Establish global constants
-const int SAFE_DIST = 60; // meters
-const int SAFE_CELL_DIST = ceil((2*(SAFE_DIST/10))/sqrt(2));
-const char MAV_VERSION[] = "110";
-const int  MAV_FRAME = 0; // 0 = MAV_FRAME_GlOBAL, WGS84 coordinate system https://github.com/mavlink/mavlink/blob/master/message_definitions/v1.0/common.xml
-const int MAV_CMD = 16; // 16 = MAV_CMD_NAV_WAYPOINT, same message definition url as above
-const double HOLD_TIME = 0; // in seconds
-const double WP_RADIUS = 5; // in meters
-const double PASS_BY_DIST = 0; // distance in meters that ASV should pass by the waypoint
-const float ROTARY_WING_YAW = 0; // or NAN?
-const double ALTITUDE = 0;
-long unsigned int POINT_DIST = 2;
 
 
 /* Converts point coordinates from UTM northing & easting in decimal degrees
- * to image (x,y) coordinates with the bottom left corner of the image being
- * (0,0) and the x & y axes increasing to the right & upward respectively.
- * Parameters:
- *      utm_pt = {northing, easting} coordinates of point
- * Returns: none
+ * to image (x,y) coordinates with the origin at the image's bottom,left corner.
 */
 Point utm2image(GeoCoords & utm_pt, Image & img) {
     
     double  x_img = (utm_pt.Easting() - img.EASTING)/img.XRES;
+
     // If y-resolution is negative, the image origin is in top left.
     // Image coordinates must be in bottom left.    
     double y_img;    
     if(img.YRES < 0) {
-        std::cout << "Pt n: " << utm_pt.Northing() << "\n";
-        std::cout << "img n: " << img.NORTHING << "\n";
-        std::cout << "img height: " << img.HEIGHT << "\n";
-        std::cout << "yres: " << img.YRES << "\n";
         y_img = (utm_pt.Northing() - (img.NORTHING + img.HEIGHT*(img.YRES)))/(-img.YRES);
     }
     else {
@@ -111,50 +93,36 @@ Point utm2image(GeoCoords & utm_pt, Image & img) {
  *      start = initial point in image coordinates
  *      goal = goal point in image coordinates
  *      filename = name of obstacle image for the path to be computed on
- *      step = number of image pixels between each point in the path
+ *      img = Image object that the path is being generated for
 */
-void computePath(Path & path, const Point & start, const Point & goal, const std::string filename) {
+void computePath(Path & path, const Point & start, const Point & goal, const std::string filename,
+                 const Image & img, const int safe_dist) {
     // Loading grid.
     FMGrid grid_fm2;
 
+    // convert "safety distance" from meters to number of image pixels
+    int safe_cell_dist = ceil((2*(safe_dist/img.XRES))/sqrt(2)); 
+
     // Solver declaration.
-    Solver<FMGrid> * s = new FM2<FMGrid>("FM2_Dary", SAFE_CELL_DIST);
+    Solver<FMGrid> * s = new FM2<FMGrid>("FM2_Dary", safe_cell_dist);
    
     // fills in occupancy grid    
     MapLoader::loadMapFromImg(filename.c_str(), grid_fm2);
-    /*
-    std::array<unsigned int, 2> dims = grid_fm2.getDimSizes();
-    for(unsigned int i = 0; i < dims[0]; i++) {
-        for(unsigned int j = 0; j < dims[1]; j++) {
-            unsigned int idx;
-            grid_fm2.coord2idx({i,j}, idx);
-            if(grid_fm2.getCell(idx).getOccupancy() > 0) {
-                std::cout << "Occupancy(" << idx << "): " << grid_fm2.getCell(idx).getOccupancy() << "\n";
-                grid_fm2.getCell(idx).setOccupancy(1);
-            }
-        }
-    }
-    */
     s->setEnvironment(&grid_fm2);
 
-    //std::vector<unsigned int> occ;
-    //grid_fm2.getOccupiedCells(occ);
-    //std::cout << "Num occupied cells: " << occ.size() << "\n";
-
-    //std::cout << "Total Cells: " << dims[0]*dims[1] << "\n";
     
     // computes velocities map 
     Coord start_coord = {(unsigned int) start[0], (unsigned int) start[1]};
     Coord goal_coord  = {(unsigned int)  goal[0],  (unsigned int) goal[1]};   
-    std::cout << "goal coord: " << goal_coord[0] << ", " << goal_coord[1] << "\n";
-    std::cout << "start coord: " << start_coord[0] <<  ", " << start_coord[1] << "\n";
     s->setInitialAndGoalPoints(start_coord, goal_coord);
-    std::cout << "set initial and goal\n";    
     s->compute();
 
+    // generate paths
     std::vector<double> path_vels;
     s->as<FM2 <FMGrid> >()->computePath(&path, &path_vels);
-    GridPlotter::plotArrivalTimesPath(grid_fm2, path);
+
+    /// uncomment for plotting generated path ///    
+    //GridPlotter::plotArrivalTimesPath(grid_fm2, path);
 
     // Preventing memory leaks.
     delete s;
@@ -162,46 +130,23 @@ void computePath(Path & path, const Point & start, const Point & goal, const std
     return;
 }
 
+/* Prints path points to a waypoint path file formatted for uploading to Ardupilot Mission Planner.
+ * Parameters:
+ *     path: image coordinates of each waypoint
+ *     fname: name of file to print to
+ *     img: image that path was generated on
+*/
+void printWaypoints(Path & path, const char * fname, Image & img, const int pt_dist) {
 
-// Prints each path point a file, with coordinates being in Lat/Long
-void printUTMPath(Path & path, const char * fname, Image & img) {
-    
-    std::ofstream ofs(fname);
-
-    if(ofs.is_open()) {
-        for(size_t i = 0; i < path.size(); i++) {
-            //convert to utm before printing
-            ofs << "18n "; // zone
-            ofs.precision(10);
-            ofs << (((path[i][1])*img.YRES)+img.NORTHING) << " "; // northing
-            ofs << (((path[i][0])*img.XRES)+img.EASTING) << "\n";  // easting
-        }
-    }
-    else {
-        std::cout << "Unable to open file\n";
-        exit(EXIT_FAILURE);
-    }
-}
-
-// Prints each path point a file, with coordinates being in Lat/Long
-void printImgPath(Path & path, const char * fname) {
-    
-    std::ofstream ofs(fname);
-
-    if(ofs.is_open()) {
-        for(size_t i = 0; i < path.size(); i++) {
-            ofs << "y: " << path[i][1] << ", ";
-            ofs << "x: " << path[i][0] << "\n";
-        }
-    }
-    else {
-        std::cout << "Unable to open file\n";
-        exit(EXIT_FAILURE);
-    }
-}
-
-
-void printWaypoints(Path & path, const char * fname, Image & img) {
+    // Establish MAVLink Constants
+    const char MAV_VERSION[] = "110";
+    const int  MAV_FRAME = 0; // 0 = MAV_FRAME_GlOBAL, WGS84 coordinate system https://github.com/mavlink/mavlink/blob/master/message_definitions/v1.0/common.xml
+    const int MAV_CMD = 16; // 16 = MAV_CMD_NAV_WAYPOINT, same message definition url as above
+    const double HOLD_TIME = 0; // in seconds
+    const double WP_RADIUS = 5; // in meters
+    const double PASS_BY_DIST = 0; // distance in meters that ASV should pass by the waypoint
+    const float ROTARY_WING_YAW = 0; // or NAN?
+    const double ALTITUDE = 0;
     
     std::ofstream ofs(fname);
 
@@ -214,7 +159,7 @@ void printWaypoints(Path & path, const char * fname, Image & img) {
         ofs.precision(10);
         GeoCoords curr_wp;
         for(size_t i = 0; i < path.size(); i++) {
-            if(i%POINT_DIST == 0) {            
+            if(i%((int)(pt_dist/img.XRES)) == 0) {            
                 ofs << idx << "\t";
                 ofs << current_wp << "\t";
                 ofs << MAV_FRAME << "\t";
@@ -251,6 +196,9 @@ void printWaypoints(Path & path, const char * fname, Image & img) {
 
 }
 
+/* Reads position coordinates from a filestream, and returns them as a GeoCoords object.
+ * Each line in the filestream must have the format: LATITUDE LONGITUDE
+*/
 GeoCoords getGeoCoords(std::ifstream * f) {
     char latitude[50];
     char longitude[50];
@@ -264,17 +212,21 @@ GeoCoords getGeoCoords(std::ifstream * f) {
 }
 
 
-// Input format:
-// IMAGE_FILENAME POINTS_FILENAME
+/* Command line argument format: IMAGE_PATH POINTS_PATH
+ *     IMAGE_PATH: relative path name of the GeoTiff obstacle image
+ *    POINTS_PATH: relative path name of txt file containing the start and goal positions
+ *                 in latitude/longitude format
+*/
 int main(int argc, const char ** argv)
 {
     // Check command line arguments
-    if(argc < 3) {
-        std::cout << "Not enough arguments given. Use as ./run IMAGE_FILENAME POINTS_FILENAME\n";
+    if(argc != 5 ) {
+        std::cout << "Incorrect number of arguments given. Use as ./FM2 IMAGE_PATH POINTS_FILENAME SAFE_DIST PT_DIST\n";
         exit(EXIT_FAILURE);
     }
     
-    // Read POINTS_FILENAME for zone+hemisphere, easting, northing of start & goal
+    // Read POINTS_FILENAME for latitude/longitude coordinate of start and goal
+    std::cout << "Reading lat/long of start and goal positions... ";
     std::ifstream points_file(argv[2]);
     GeoCoords start;
     GeoCoords goal;
@@ -287,8 +239,10 @@ int main(int argc, const char ** argv)
         return EXIT_FAILURE;
     }
     points_file.close();
+    std::cout << "finished.\n";
 
     // Extract geospatial data from GeoTiff
+    std::cout << "Parsing GeoTiff image... ";
     std::string image_name = argv[1];
     GDALDataset * poDataset;
     GDALAllRegister();
@@ -310,22 +264,24 @@ int main(int argc, const char ** argv)
 
     Image img(gt[0], gt[3], poDataset->GetRasterXSize(), poDataset->GetRasterYSize(), 
               gt[1], gt[5], start.Zone(), start.Northp());
-
-    std::cout << "Size: " << img.WIDTH << ", " << img.HEIGHT << "\n";
-    std::cout << "Easting/Northing " << img.EASTING << ", " << img.NORTHING << "\n";
-    std::cout << "Resolution: " << img.XRES << ", " << img.YRES << "\n";
-    std::cout << "Zone, north? " << img.ZONE << ", " << img.isNORTH << "\n";
+    GDALClose((GDALDatasetH) poDataset);
+    std::cout << "finished.\n";
 
     // Convert start & goal coordinates to image coordinates
     Point startImg = utm2image(start, img);
     Point goalImg  = utm2image(goal, img);
    
     // Compute path
+    std::cout << "Computing path... ";
     Path path;
-    computePath(path, startImg, goalImg, image_name.substr(0, image_name.length()-3) += "png");
+    const int safe_dist = atoi(argv[3]);
+    computePath(path, startImg, goalImg, image_name.substr(0, image_name.length()-3) += "png", img, safe_dist);
+    std::cout << "finished.\n";
 
     // Print path to a file
-    printWaypoints(path, "path.txt", img);
+    const int pt_dist = atoi(argv[4]);
+    printWaypoints(path, "path.txt", img, pt_dist);
+    std::cout << "Printed waypoint file to path.txt\n";
 
     return EXIT_SUCCESS;
 }

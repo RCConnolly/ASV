@@ -112,8 +112,8 @@ void computePath(Path & path, const Point & start, const Point & goal, const std
 
     
     // computes velocities map 
-    Coord start_coord = {(unsigned int) start[0], (unsigned int) start[1]};
-    Coord goal_coord  = {(unsigned int)  goal[0],  (unsigned int) goal[1]};   
+    Coord start_coord = {(unsigned int) round(start[0]), (unsigned int) round(start[1])};
+    Coord goal_coord  = {(unsigned int) round(goal[0]),  (unsigned int) round(goal[1])};   
     s->setInitialAndGoalPoints(start_coord, goal_coord);
     s->compute();
 
